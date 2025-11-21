@@ -12,7 +12,18 @@ import {
   Undo,
   Image as ImageIcon,
   Loader2,
-  Type
+  Type,
+  RefreshCw,
+  RectangleVertical,
+  RectangleHorizontal,
+  ArrowRightLeft,
+  ArrowUpDown,
+  Maximize,
+  Palette,
+  PaintBucket,
+  Highlighter,
+  Cloud,
+  Copy
 } from 'lucide-react';
 
 export { 
@@ -28,5 +39,16 @@ export {
   Undo,
   ImageIcon,
   Loader2,
-  Type
+  Type,
+  RefreshCw,
+  RectangleVertical,
+  RectangleHorizontal,
+  ArrowRightLeft,
+  ArrowUpDown,
+  Maximize,
+  Palette,
+  PaintBucket,
+  Highlighter,
+  Cloud,
+  Copy
 };

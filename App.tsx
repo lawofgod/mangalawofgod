@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Upload, Wand2, Loader2, ImageIcon, Zap, MessageSquare, Trash2 } from './components/Icons';
+import { Upload, Wand2, Loader2, ImageIcon, Zap, MessageSquare, Trash2, Square, RefreshCw, RectangleVertical, RectangleHorizontal, Copy } from './components/Icons';
 import { generateMangaPage } from './services/geminiService';
 import { Editor } from './components/Editor';
 
@@ -7,7 +7,11 @@ const App: React.FC = () => {
   const [files, setFiles] = useState<File[]>([]);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [generatedImage, setGeneratedImage] = useState<string | null>(null);
+  
+  // State for generation results
+  const [generatedImages, setGeneratedImages] = useState<string[]>([]);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  
   const [error, setError] = useState<string | null>(null);
   const [storyPrompt, setStoryPrompt] = useState<string>("");
   
@@ -16,6 +20,15 @@ const App: React.FC = () => {
   
   // State for Model Quality (Standard vs Pro)
   const [useProModel, setUseProModel] = useState<boolean>(false);
+
+  // State for Panel Count
+  const [panelCount, setPanelCount] = useState<string>("random");
+
+  // State for Aspect Ratio
+  const [aspectRatio, setAspectRatio] = useState<'portrait' | 'landscape'>('portrait');
+
+  // State for Variation Count
+  const [variationCount, setVariationCount] = useState<number>(3);
 
   // State for API Key Verification
   const [hasApiKey, setHasApiKey] = useState(false);
@@ -86,14 +99,25 @@ const App: React.FC = () => {
 
     setIsGenerating(true);
     setError(null);
+    setGeneratedImages([]); // Clear previous results
 
     try {
-      const resultImage = await generateMangaPage(files, storyPrompt, isColor, useProModel);
-      setGeneratedImage(resultImage);
+      // Request variations based on user selection
+      const resultImages = await generateMangaPage(
+        files, 
+        storyPrompt, 
+        isColor, 
+        useProModel, 
+        panelCount, 
+        variationCount, 
+        aspectRatio
+      );
+      setGeneratedImages(resultImages);
     } catch (err: any) {
       console.error(err);
-      // Handle 403/Permission errors
       const errorMessage = err.message || "";
+      
+      // Handle 403/Permission errors
       if (
         errorMessage.includes("403") || 
         errorMessage.includes("PERMISSION_DENIED") || 
@@ -101,7 +125,16 @@ const App: React.FC = () => {
       ) {
         setHasApiKey(false);
         setError("Permission denied. The selected model requires a valid API Key with billing enabled. Please try Standard mode or select a key.");
-      } else {
+      } 
+      // Handle 429/Quota errors
+      else if (
+        errorMessage.includes("429") || 
+        errorMessage.includes("quota") || 
+        errorMessage.includes("RESOURCE_EXHAUSTED")
+      ) {
+        setError("Server is busy (API Quota Exceeded). Please wait a minute before trying again.");
+      } 
+      else {
         setError(errorMessage || "Failed to generate manga page. Please try again.");
       }
     } finally {
@@ -110,22 +143,82 @@ const App: React.FC = () => {
   };
 
   const handleReset = () => {
-    setGeneratedImage(null);
+    setGeneratedImages([]);
+    setSelectedImage(null);
     setFiles([]);
     setPreviewUrls([]);
     setError(null);
     // Keep settings (prompt, mode) for easier retry
   };
 
+  const handleBackToSelection = () => {
+    setSelectedImage(null);
+  };
+
   // Render Editor View
-  if (generatedImage) {
+  if (selectedImage) {
     return (
       <div className="h-screen flex flex-col bg-gray-900 text-white">
          <div className="bg-indigo-900 text-white px-6 py-2 text-xs flex justify-between items-center">
-            <span className="font-comic text-lg">Manga lawofgod</span>
+            <div className="flex items-center gap-4">
+               <span className="font-comic text-lg">Manga lawofgod</span>
+               {generatedImages.length > 1 && (
+                 <button onClick={handleBackToSelection} className="text-indigo-300 hover:text-white flex items-center gap-1">
+                    &larr; Back to Variations
+                 </button>
+               )}
+            </div>
             <button onClick={handleReset} className="hover:text-indigo-200 underline">Start Over</button>
          </div>
-        <Editor imageUrl={generatedImage} />
+        <Editor imageUrl={selectedImage} />
+      </div>
+    );
+  }
+
+  // Render Selection View
+  if (generatedImages.length > 0) {
+    return (
+      <div className="min-h-screen bg-gray-900 text-gray-100 flex flex-col items-center justify-center p-6">
+        <h2 className="text-3xl font-comic mb-8 text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">
+          Choose your favorite variation
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl w-full">
+          {generatedImages.map((img, idx) => (
+            <div 
+              key={idx}
+              className="group relative bg-gray-800 rounded-xl p-2 cursor-pointer hover:scale-105 transition-transform duration-300 border-2 border-transparent hover:border-indigo-500 shadow-2xl"
+              onClick={() => setSelectedImage(img)}
+            >
+              <img 
+                src={img} 
+                alt={`Variation ${idx + 1}`} 
+                className="w-full h-auto rounded-lg shadow-md"
+              />
+              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors rounded-xl flex items-center justify-center">
+                 <span className="opacity-0 group-hover:opacity-100 bg-indigo-600 text-white px-6 py-2 rounded-full font-bold shadow-lg transform translate-y-4 group-hover:translate-y-0 transition-all">
+                   Select This One
+                 </span>
+              </div>
+              <div className="absolute top-4 left-4 bg-black/70 text-white px-3 py-1 rounded text-xs font-bold">
+                #{idx + 1}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="mt-12 flex gap-4">
+           <button 
+             onClick={() => setGeneratedImages([])}
+             className="px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg font-medium text-gray-300 transition-colors flex items-center gap-2"
+           >
+             <Trash2 size={18} /> Discard & Back
+           </button>
+           <button 
+             onClick={handleGenerate}
+             className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 rounded-lg font-medium text-white transition-colors shadow-lg flex items-center gap-2"
+           >
+             <RefreshCw size={18} /> Re-generate ({variationCount}x)
+           </button>
+        </div>
       </div>
     );
   }
@@ -160,7 +253,7 @@ const App: React.FC = () => {
               </div>
               <div>
                 <h3 className="font-bold text-lg">Auto-Layout</h3>
-                <p className="text-sm text-gray-400">Professional comic composition.</p>
+                <p className="text-sm text-gray-400">Generates variations to choose from.</p>
               </div>
             </div>
           </div>
@@ -233,61 +326,135 @@ const App: React.FC = () => {
             </div>
 
             {/* Options Grid */}
-            <div className="grid grid-cols-1 gap-4">
+            <div className="space-y-4">
               
-              {/* Style Selector */}
-              <div className="grid grid-cols-2 gap-3">
-                <button 
-                  onClick={() => setIsColor(true)}
-                  className={`py-2 px-3 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 border ${
-                    isColor 
-                      ? 'bg-indigo-600/20 border-indigo-500 text-indigo-300' 
-                      : 'bg-gray-700/50 border-transparent text-gray-400 hover:bg-gray-700'
-                  }`}
-                >
-                  <div className="w-2 h-2 rounded-full bg-gradient-to-r from-red-500 via-green-500 to-blue-500"></div>
-                  Color
-                </button>
-                <button 
-                  onClick={() => setIsColor(false)}
-                  className={`py-2 px-3 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 border ${
-                    !isColor 
-                      ? 'bg-indigo-600/20 border-indigo-500 text-indigo-300' 
-                      : 'bg-gray-700/50 border-transparent text-gray-400 hover:bg-gray-700'
-                  }`}
-                >
-                  <div className="w-2 h-2 rounded-full bg-gray-400"></div>
-                  B&W
-                </button>
+              {/* Row 1: Style & Quality */}
+              <div className="grid grid-cols-2 gap-4">
+                {/* Style Selector */}
+                <div className="flex gap-1 p-1 bg-gray-900 rounded-lg border border-gray-700">
+                   <button 
+                    onClick={() => setIsColor(true)}
+                    className={`flex-1 py-1.5 px-2 rounded-md text-xs font-medium transition-all flex items-center justify-center gap-1.5 ${
+                      isColor 
+                        ? 'bg-gray-700 text-white shadow-sm' 
+                        : 'text-gray-500 hover:text-gray-300'
+                    }`}
+                  >
+                    <div className="w-2 h-2 rounded-full bg-gradient-to-r from-red-500 via-green-500 to-blue-500"></div>
+                    Color
+                  </button>
+                  <button 
+                    onClick={() => setIsColor(false)}
+                    className={`flex-1 py-1.5 px-2 rounded-md text-xs font-medium transition-all flex items-center justify-center gap-1.5 ${
+                      !isColor 
+                        ? 'bg-gray-700 text-white shadow-sm' 
+                        : 'text-gray-500 hover:text-gray-300'
+                    }`}
+                  >
+                    <div className="w-2 h-2 rounded-full bg-gray-400"></div>
+                    B&W
+                  </button>
+                </div>
+
+                {/* Quality Selector */}
+                <div className="flex gap-1 p-1 bg-gray-900 rounded-lg border border-gray-700">
+                   <button 
+                    onClick={() => setUseProModel(false)}
+                    className={`flex-1 py-1.5 px-2 rounded-md text-xs font-medium transition-all flex items-center justify-center gap-1 ${
+                      !useProModel 
+                        ? 'bg-gray-700 text-white shadow-sm' 
+                        : 'text-gray-500 hover:text-gray-300'
+                    }`}
+                  >
+                    Standard
+                  </button>
+                  <button 
+                    onClick={() => setUseProModel(true)}
+                    className={`flex-1 py-1.5 px-2 rounded-md text-xs font-medium transition-all flex items-center justify-center gap-1 ${
+                      useProModel 
+                        ? 'bg-gray-700 text-white shadow-sm' 
+                        : 'text-gray-500 hover:text-gray-300'
+                    }`}
+                  >
+                    Pro <Zap size={10} className="text-yellow-400 fill-yellow-400" />
+                  </button>
+                </div>
               </div>
 
-              {/* Quality Selector */}
-              <div className="grid grid-cols-2 gap-3">
-                <button 
-                  onClick={() => setUseProModel(false)}
-                  className={`py-2 px-3 rounded-lg text-sm font-medium transition-all flex flex-col items-center justify-center gap-1 border ${
-                    !useProModel 
-                      ? 'bg-indigo-600/20 border-indigo-500 text-indigo-300' 
-                      : 'bg-gray-700/50 border-transparent text-gray-400 hover:bg-gray-700'
-                  }`}
-                >
-                  <span>Standard</span>
-                  <span className="text-[10px] opacity-70">Fast • Free</span>
-                </button>
-                <button 
-                  onClick={() => setUseProModel(true)}
-                  className={`py-2 px-3 rounded-lg text-sm font-medium transition-all flex flex-col items-center justify-center gap-1 border ${
-                    useProModel 
-                      ? 'bg-indigo-600/20 border-indigo-500 text-indigo-300' 
-                      : 'bg-gray-700/50 border-transparent text-gray-400 hover:bg-gray-700'
-                  }`}
-                >
-                  <div className="flex items-center gap-1">
-                    <span>Pro</span>
-                    <Zap size={12} className="text-yellow-400 fill-yellow-400" />
-                  </div>
-                  <span className="text-[10px] opacity-70">High Detail • Login Req</span>
-                </button>
+              {/* Row 2: Orientation (Aspect Ratio) & Variation Count */}
+              <div className="grid grid-cols-2 gap-4">
+                 {/* Orientation */}
+                 <div>
+                    <label className="text-xs font-medium text-gray-500 mb-2 flex items-center gap-2">
+                      <ImageIcon size={12} /> Orientation
+                    </label>
+                    <div className="flex gap-1 p-1 bg-gray-900 rounded-lg border border-gray-700">
+                      <button 
+                        onClick={() => setAspectRatio('portrait')}
+                        className={`flex-1 py-1.5 px-2 rounded-md text-xs font-medium transition-all flex items-center justify-center gap-1 ${
+                          aspectRatio === 'portrait'
+                            ? 'bg-gray-700 text-white shadow-sm' 
+                            : 'text-gray-500 hover:text-gray-300'
+                        }`}
+                      >
+                        <RectangleVertical size={14} /> Vert
+                      </button>
+                      <button 
+                        onClick={() => setAspectRatio('landscape')}
+                        className={`flex-1 py-1.5 px-2 rounded-md text-xs font-medium transition-all flex items-center justify-center gap-1 ${
+                          aspectRatio === 'landscape'
+                            ? 'bg-gray-700 text-white shadow-sm' 
+                            : 'text-gray-500 hover:text-gray-300'
+                        }`}
+                      >
+                        <RectangleHorizontal size={14} /> Horz
+                      </button>
+                    </div>
+                 </div>
+
+                 {/* Variation Count */}
+                 <div>
+                    <label className="text-xs font-medium text-gray-500 mb-2 flex items-center gap-2">
+                      <Copy size={12} /> Variations
+                    </label>
+                    <div className="flex gap-1 p-1 bg-gray-900 rounded-lg border border-gray-700">
+                      {[1, 2, 3].map(count => (
+                        <button 
+                          key={count}
+                          onClick={() => setVariationCount(count)}
+                          className={`flex-1 py-1.5 px-2 rounded-md text-xs font-medium transition-all flex items-center justify-center gap-1 ${
+                            variationCount === count
+                              ? 'bg-gray-700 text-white shadow-sm' 
+                              : 'text-gray-500 hover:text-gray-300'
+                          }`}
+                        >
+                          {count}x
+                        </button>
+                      ))}
+                    </div>
+                 </div>
+              </div>
+
+              {/* Row 3: Panel Count */}
+              <div>
+                <label className="text-xs font-medium text-gray-500 mb-2 flex items-center gap-2">
+                  <Square size={12} /> Panel Layout
+                </label>
+                <div className="flex gap-2">
+                   {['random', '1', '2', '3', '4'].map(opt => (
+                     <button
+                        key={opt}
+                        onClick={() => setPanelCount(opt)}
+                        className={`flex-1 py-2 text-xs font-medium rounded-lg border transition-all ${
+                          panelCount === opt
+                            ? 'bg-indigo-600/20 border-indigo-500 text-indigo-300'
+                            : 'bg-gray-700/30 border-transparent text-gray-400 hover:bg-gray-700/50'
+                        }`}
+                     >
+                       {opt === 'random' ? 'Random' : opt}
+                     </button>
+                   ))}
+                </div>
               </div>
 
             </div>
@@ -304,7 +471,7 @@ const App: React.FC = () => {
             >
               {isGenerating ? (
                 <>
-                  <Loader2 className="animate-spin" /> Generating Page...
+                  <Loader2 className="animate-spin" /> Generating {variationCount} Variations...
                 </>
               ) : (
                 <>
@@ -315,9 +482,19 @@ const App: React.FC = () => {
             
             {/* Helper text for Pro mode */}
             {useProModel && !hasApiKey && (
-              <p className="text-xs text-center text-yellow-500/80 mt-2">
-                Pro mode requires connecting a Google Cloud Project API key.
-              </p>
+              <div className="text-center mt-3 p-2 bg-yellow-900/20 rounded border border-yellow-700/30">
+                <p className="text-xs text-yellow-500/80 mb-1">
+                  Pro mode requires a paid Google Cloud Project API key.
+                </p>
+                <a 
+                  href="https://ai.google.dev/gemini-api/docs/billing" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-xs text-indigo-400 hover:text-indigo-300 underline font-medium"
+                >
+                  How to get a Paid API Key? &rarr;
+                </a>
+              </div>
             )}
             
              {/* Link to change key if already set */}

@@ -3,7 +3,9 @@ export enum BubbleType {
   THOUGHT = 'THOUGHT',
   SHOUT = 'SHOUT',
   BOX = 'BOX',
-  PLAIN_TEXT = 'PLAIN_TEXT'
+  PLAIN_TEXT = 'PLAIN_TEXT',
+  WHISPER = 'WHISPER',
+  FLASH = 'FLASH'
 }
 
 export interface TextBubble {
@@ -16,6 +18,16 @@ export interface TextBubble {
   height: number;
   fontSize?: number;
   fontWeight?: string;
+  fontFamily?: string;
+  letterSpacing?: number;
+  lineHeight?: number;
+  padding?: number;
+  // Visual Styles
+  textColor?: string;
+  textStrokeColor?: string;
+  textStrokeWidth?: number;
+  backgroundColor?: string;
+  borderColor?: string;
 }
 
 export interface GeneratedImage {
